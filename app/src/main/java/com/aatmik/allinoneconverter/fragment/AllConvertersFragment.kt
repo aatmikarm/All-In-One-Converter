@@ -1,6 +1,13 @@
 package com.aatmik.allinoneconverter.fragment
 
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -16,28 +23,27 @@ import com.aatmik.allinoneconverter.activity.ConverterActivity
 import com.aatmik.allinoneconverter.adapter.CategoryAdapter
 import com.aatmik.allinoneconverter.adapter.ConverterAdapter
 import com.aatmik.allinoneconverter.databinding.FragmentAllConvertersBinding
+import com.aatmik.allinoneconverter.databinding.BottomSheetLayoutBinding
 import com.aatmik.allinoneconverter.model.Converter
 import com.aatmik.allinoneconverter.util.ConverterCategoriesUtil
 import com.aatmik.allinoneconverter.util.ConverterUtils
+import com.google.android.material.bottomsheet.BottomSheetDialog
 
 class AllConvertersFragment : Fragment() {
 
     private var _binding: FragmentAllConvertersBinding? = null
     private val binding get() = _binding!!
 
-    // RecyclerView for converters
     private lateinit var converterRV: RecyclerView
     private lateinit var converterAdapter: ConverterAdapter
     private lateinit var converterList: ArrayList<Converter>
     private lateinit var originalConverterList: ArrayList<Converter>
 
-    // RecyclerView for categories
     private lateinit var categoriesRV: RecyclerView
     private lateinit var categoryAdapter: CategoryAdapter
     private var currentSelectedCategory = "All"
     private var currentCategoryIndex = 0
 
-    // Collapsible category section
     private var isCategoryExpanded = false
 
     companion object {
@@ -191,12 +197,137 @@ class AllConvertersFragment : Fragment() {
 
     private fun setupClickListeners() {
         binding.menuIv.setOnClickListener {
-            showMenu()
+            showBottomSheet()
         }
     }
 
-    private fun showMenu() {
-        Toast.makeText(requireContext(), "Menu clicked", Toast.LENGTH_SHORT).show()
+    private fun showBottomSheet() {
+        val bottomSheetDialog = BottomSheetDialog(requireContext())
+        val bottomSheetBinding = BottomSheetLayoutBinding.inflate(layoutInflater)
+
+        bottomSheetBinding.rateApp.setOnClickListener {
+            rateApp()
+            bottomSheetDialog.dismiss()
+        }
+
+        bottomSheetBinding.btnShareApp.setOnClickListener {
+            shareApp()
+            bottomSheetDialog.dismiss()
+        }
+
+        bottomSheetBinding.btnGetUpdate.setOnClickListener {
+            checkForUpdates()
+            bottomSheetDialog.dismiss()
+        }
+
+        bottomSheetBinding.btnCustomerSupport.setOnClickListener {
+            openCustomerSupport()
+            bottomSheetDialog.dismiss()
+        }
+
+        bottomSheetDialog.setContentView(bottomSheetBinding.root)
+        bottomSheetDialog.show()
+    }
+
+    private fun shareApp() {
+        val appPackageName = "com.aatmik.allinoneconverter"
+        val appName = "All In One Converter"
+        val playStoreLink = "https://play.google.com/store/apps/details?id=$appPackageName"
+
+        val shareMessage = """
+        Hey! Check out this amazing converter app I've been using.
+        
+        $appName - All-in-one converter with multiple features including image conversion, PDF tools, and much more!
+        
+        Download it here: $playStoreLink
+    """.trimIndent()
+
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Check out $appName")
+            putExtra(Intent.EXTRA_TEXT, shareMessage)
+        }
+
+        try {
+            startActivity(Intent.createChooser(shareIntent, "Share via"))
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Unable to share", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openCustomerSupport() {
+        val supportEmail = "allinoneconverterapp@gmail.com"
+        val subject = "Converter App Support Request"
+        val body = """
+        Dear Support Team,
+        
+        I need assistance with the All In One Converter App.
+        
+        Device Information:
+        - App Version: ${getAppVersion()}
+        - Android Version: ${Build.VERSION.RELEASE}
+        - Device Model: ${Build.MODEL}
+        - Device Manufacturer: ${Build.MANUFACTURER}
+        
+        Issue Description:
+        [Please describe your issue here]
+        
+        Best regards,
+        [Your name]
+    """.trimIndent()
+
+        val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:")
+            putExtra(Intent.EXTRA_EMAIL, arrayOf(supportEmail))
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+
+        try {
+            startActivity(Intent.createChooser(emailIntent, "Send Email"))
+        } catch (ex: ActivityNotFoundException) {
+            Toast.makeText(
+                requireContext(),
+                "No email app found. Please send an email to: $supportEmail",
+                Toast.LENGTH_LONG
+            ).show()
+
+            val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("Support Email", supportEmail)
+            clipboard.setPrimaryClip(clip)
+
+            Toast.makeText(requireContext(), "Email address copied to clipboard", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun getAppVersion(): String {
+        return try {
+            val packageInfo = requireContext().packageManager.getPackageInfo(requireContext().packageName, 0)
+            packageInfo.versionName ?: "Unknown"
+        } catch (e: PackageManager.NameNotFoundException) {
+            "Unknown"
+        }
+    }
+
+    private fun rateApp() {
+        val appPackageName = "com.aatmik.allinoneconverter"
+        startActivity(
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/apps/details?id=$appPackageName&showRating=true")
+            )
+        )
+    }
+
+    private fun checkForUpdates() {
+        val appPackageName = "com.aatmik.allinoneconverter"
+        startActivity(
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/apps/details?id=$appPackageName")
+            )
+        )
+        Toast.makeText(requireContext(), "Checking for updates...", Toast.LENGTH_SHORT).show()
     }
 
     private fun handleConverterSelection(converterName: String) {

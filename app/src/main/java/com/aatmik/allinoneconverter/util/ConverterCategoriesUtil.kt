@@ -7,15 +7,9 @@ import com.aatmik.allinoneconverter.model.Converter
 object ConverterCategoriesUtil {
 
     val categories = arrayListOf(
-        Category("All", R.drawable.ic_all),
-        Category("Image", R.drawable.ic_image_converter),
-        Category("Document", R.drawable.ic_document_converter),
-        Category("Audio", R.drawable.ic_audio_converter),
-        Category("Video", R.drawable.ic_video_converter),
-        Category("Archive", R.drawable.ic_archive_converter),
-        Category("eBook", R.drawable.ic_ebook_converter),
-        Category("Data", R.drawable.ic_data_converter),
-        Category("Tools", R.drawable.ic_tools)
+        Category("All", R.drawable.all),
+        Category("Main", R.drawable.category),
+        Category("Tools", R.drawable.tools)
     )
 
     fun getConvertersForCategory(categoryName: String, allConverters: ArrayList<Converter>): ArrayList<Converter> {

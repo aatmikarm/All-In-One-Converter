@@ -1,11 +1,14 @@
 package com.aatmik.allinoneconverter.activity
 
 import android.os.Bundle
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.fragment.app.Fragment
+import com.aatmik.allinoneconverter.R
 import com.aatmik.allinoneconverter.databinding.ActivityConverterBinding
+import com.aatmik.allinoneconverter.fragment.converters.ImageConverterFragment
+import com.aatmik.allinoneconverter.fragment.converters.PlaceholderFragment
 
 class ConverterActivity : AppCompatActivity() {
 
@@ -20,10 +23,10 @@ class ConverterActivity : AppCompatActivity() {
 
         val converterName = intent.getStringExtra("converterName")
 
+        supportActionBar?.title = converterName
         binding.converterTitle.text = converterName ?: "Converter"
 
-        // TODO: Load appropriate converter fragment based on converterName
-        showConverterInfo(converterName)
+        loadConverterFragment(converterName)
     }
 
     private fun setupEdgeToEdgeInsets() {
@@ -39,9 +42,25 @@ class ConverterActivity : AppCompatActivity() {
         }
     }
 
-    private fun showConverterInfo(converterName: String?) {
-        Toast.makeText(this, "Converter: $converterName", Toast.LENGTH_SHORT).show()
-        // TODO: Implement actual conversion logic
+    private fun loadConverterFragment(converterName: String?) {
+        val fragment: Fragment = when (converterName) {
+            "Images" -> ImageConverterFragment()
+            "PDF" -> PlaceholderFragment.newInstance(converterName)
+            "Audio" -> PlaceholderFragment.newInstance(converterName)
+            "Video" -> PlaceholderFragment.newInstance(converterName)
+            "Image Compressor" -> PlaceholderFragment.newInstance(converterName)
+            "PDF Compressor" -> PlaceholderFragment.newInstance(converterName)
+            "PDF Merger" -> PlaceholderFragment.newInstance(converterName)
+            "PDF Splitter" -> PlaceholderFragment.newInstance(converterName)
+            "OCR Scanner" -> PlaceholderFragment.newInstance(converterName)
+            "QR Code Generator" -> PlaceholderFragment.newInstance(converterName)
+            "Barcode Generator" -> PlaceholderFragment.newInstance(converterName)
+            else -> PlaceholderFragment.newInstance(converterName ?: "Unknown Converter")
+        }
+
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.converterFragmentContainer, fragment)
+            .commit()
     }
 
     override fun onSupportNavigateUp(): Boolean {
