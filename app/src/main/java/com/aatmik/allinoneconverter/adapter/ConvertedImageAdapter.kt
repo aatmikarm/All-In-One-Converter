@@ -10,6 +10,8 @@ import androidx.cardview.widget.CardView
 import androidx.recyclerview.widget.RecyclerView
 import com.aatmik.allinoneconverter.R
 import com.aatmik.allinoneconverter.model.ConvertedImage
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 
 class ConvertedImageAdapter(
     private val convertedImages: List<ConvertedImage>
@@ -27,7 +29,14 @@ class ConvertedImageAdapter(
     override fun onBindViewHolder(holder: ConvertedImageViewHolder, position: Int) {
         val convertedImage = convertedImages[position]
 
-        holder.imageView.setImageURI(convertedImage.convertedUri)
+        // Use Glide for smooth image loading
+        Glide.with(holder.itemView.context)
+            .load(convertedImage.convertedUri)
+            .centerCrop()
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .thumbnail(0.1f)
+            .into(holder.imageView)
+
         holder.formatText.text = convertedImage.format
 
         holder.shareButton.setOnClickListener {

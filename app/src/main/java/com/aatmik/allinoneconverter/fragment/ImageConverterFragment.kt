@@ -1,11 +1,15 @@
 package com.aatmik.allinoneconverter.fragment.converters
 
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -94,8 +98,8 @@ class ImageConverterFragment : Fragment() {
         binding.inputFormatSpinner.adapter = adapter
         binding.outputFormatSpinner.adapter = adapter
 
-        binding.inputFormatSpinner.setSelection(0) // JPG
-        binding.outputFormatSpinner.setSelection(1) // PNG
+        binding.inputFormatSpinner.setSelection(0)
+        binding.outputFormatSpinner.setSelection(1)
 
         binding.inputFormatSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -117,6 +121,17 @@ class ImageConverterFragment : Fragment() {
         binding.convertedImagesRV.apply {
             layoutManager = GridLayoutManager(requireContext(), 2)
             adapter = convertedImageAdapter
+
+            // Set RecyclerView height to 70% of screen height
+            post {
+                val displayMetrics = resources.displayMetrics
+                val screenHeight = displayMetrics.heightPixels
+                val recyclerViewHeight = (screenHeight * 0.8).toInt()
+
+                layoutParams = layoutParams.apply {
+                    height = recyclerViewHeight
+                }
+            }
         }
     }
 
@@ -144,6 +159,10 @@ class ImageConverterFragment : Fragment() {
         binding.clearButton.setOnClickListener {
             clearAll()
         }
+
+        binding.shareAllButton.setOnClickListener {
+            shareAllImages()
+        }
     }
 
     private fun pickImages(multiple: Boolean) {
@@ -167,6 +186,8 @@ class ImageConverterFragment : Fragment() {
 
         convertedImages.clear()
         convertedImageAdapter.notifyDataSetChanged()
+
+        val isSingleImage = selectedImageUris.size == 1
 
         conversionJob = CoroutineScope(Dispatchers.IO).launch {
             val total = selectedImageUris.size
@@ -192,25 +213,68 @@ class ImageConverterFragment : Fragment() {
 
                     val quality = if (outputFormat == "PNG") 100 else 90
 
-                    val outputFile = File(
-                        requireContext().getExternalFilesDir(null),
-                        "converted_${System.currentTimeMillis()}_${index}.${outputFormat.lowercase()}"
-                    )
+                    val originalFileName = getFileNameFromUri(uri)
 
-                    FileOutputStream(outputFile).use { out ->
-                        bitmap.compress(format, quality, out)
+                    val newFileName = if (isSingleImage) {
+                        "AIO_Converter_${originalFileName}.${outputFormat.lowercase()}"
+                    } else {
+                        "AIO_Converter_${originalFileName}_${index + 1}.${outputFormat.lowercase()}"
                     }
 
-                    val convertedImage = ConvertedImage(
-                        originalUri = uri,
-                        convertedUri = Uri.fromFile(outputFile),
-                        outputPath = outputFile.absolutePath,
-                        format = outputFormat
-                    )
+                    val mimeType = when (outputFormat) {
+                        "PNG" -> "image/png"
+                        "WEBP" -> "image/webp"
+                        "BMP" -> "image/bmp"
+                        else -> "image/jpeg"
+                    }
 
-                    withContext(Dispatchers.Main) {
-                        convertedImages.add(convertedImage)
-                        convertedImageAdapter.notifyItemInserted(convertedImages.size - 1)
+                    val savedUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val values = ContentValues().apply {
+                            put(MediaStore.Images.Media.DISPLAY_NAME, newFileName)
+                            put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+                            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_DCIM}/AIO Converter")
+                        }
+
+                        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                        val imageUri = requireContext().contentResolver.insert(collection, values)
+
+                        imageUri?.let { uri ->
+                            requireContext().contentResolver.openOutputStream(uri)?.use { outputStream ->
+                                bitmap.compress(format, quality, outputStream)
+                            }
+                        }
+                        imageUri
+                    } else {
+                        val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+                        val appFolder = File(dcimDir, "AIO Converter")
+                        if (!appFolder.exists()) {
+                            appFolder.mkdirs()
+                        }
+
+                        val outputFile = File(appFolder, newFileName)
+                        FileOutputStream(outputFile).use { out ->
+                            bitmap.compress(format, quality, out)
+                        }
+
+                        val mediaScanIntent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
+                        mediaScanIntent.data = Uri.fromFile(outputFile)
+                        requireContext().sendBroadcast(mediaScanIntent)
+
+                        Uri.fromFile(outputFile)
+                    }
+
+                    savedUri?.let { resultUri ->
+                        val convertedImage = ConvertedImage(
+                            originalUri = uri,
+                            convertedUri = resultUri,
+                            outputPath = newFileName,
+                            format = outputFormat
+                        )
+
+                        withContext(Dispatchers.Main) {
+                            convertedImages.add(convertedImage)
+                            convertedImageAdapter.notifyItemInserted(convertedImages.size - 1)
+                        }
                     }
 
                 } catch (e: Exception) {
@@ -233,14 +297,52 @@ class ImageConverterFragment : Fragment() {
 
                 if (convertedImages.isNotEmpty()) {
                     binding.convertedImagesSection.visibility = View.VISIBLE
+
+                    // Auto-scroll to converted images section
+                    binding.root.post {
+                        binding.root.smoothScrollTo(0, binding.convertedImagesSection.top)
+                    }
+
                     Toast.makeText(
                         requireContext(),
-                        "Successfully converted ${convertedImages.size} image(s)!",
+                        "Successfully converted ${convertedImages.size} image(s)!\nSaved to Gallery",
                         Toast.LENGTH_LONG
                     ).show()
                 }
             }
         }
+    }
+
+    private fun getFileNameFromUri(uri: Uri): String {
+        var fileName = "image"
+        requireContext().contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (nameIndex != -1 && cursor.moveToFirst()) {
+                fileName = cursor.getString(nameIndex)
+                fileName = fileName.substringBeforeLast(".")
+                fileName = fileName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+            }
+        }
+        return fileName
+    }
+
+    private fun shareAllImages() {
+        if (convertedImages.isEmpty()) {
+            Toast.makeText(requireContext(), "No images to share", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val uris = ArrayList<Uri>()
+        convertedImages.forEach { uris.add(it.convertedUri) }
+
+        val shareIntent = Intent().apply {
+            action = Intent.ACTION_SEND_MULTIPLE
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            type = "image/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        startActivity(Intent.createChooser(shareIntent, "Share All Images"))
     }
 
     private fun clearAll() {
